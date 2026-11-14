@@ -34,7 +34,7 @@ class ApiTests(unittest.TestCase):
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
         self.base = f"http://127.0.0.1:{self.httpd.server_port}"
-        _, verified = self.request("/api/verify-key", {"key": "SK-2026114"}, authenticated=False)
+        _, verified = self.request("/api/verify-key", {"key": "sk-20261114"}, authenticated=False)
         self.token = verified["token"]
 
     def tearDown(self):

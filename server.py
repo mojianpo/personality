@@ -1,4 +1,5 @@
 """Zero-dependency personality quiz API and static site."""
+import argparse
 import json
 import os
 import re
@@ -14,7 +15,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("DB_PATH", ROOT / "data" / "personality.db"))
 DISPLAY_BASELINE = 1000
-QUIZ_KEY = os.environ.get("QUIZ_KEY", "SK-2026114")
+QUIZ_KEY = os.environ.get("QUIZ_KEY", "SK-20261114")
 ACCESS_TOKENS = {}
 ACCESS_TOKEN_TTL = 60 * 60
 
@@ -164,7 +165,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("\u8bf7\u6c42\u5185\u5bb9\u5927\u5c0f\u65e0\u6548\u3002")
             payload = json.loads(self.rfile.read(length))
             if path == "/api/verify-key":
-                if not secrets.compare_digest(str(payload.get("key", "")), QUIZ_KEY):
+                if not secrets.compare_digest(str(payload.get("key", "")).casefold().encode("utf-8"), QUIZ_KEY.casefold().encode("utf-8")):
                     return self.send_json(401, {"error": "KEY \u4e0d\u6b63\u786e\uff0c\u8bf7\u8f93\u5165\u6b63\u786e\u7684 KEY\u3002"})
                 token = secrets.token_urlsafe(32)
                 ACCESS_TOKENS[token] = time.monotonic() + ACCESS_TOKEN_TTL
@@ -183,6 +184,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(201, {"code": code, "dimensions": details, "completed_people": DISPLAY_BASELINE + count})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8000"))
-    print(f"人格罗盘: http://127.0.0.1:{port}")
+    parser = argparse.ArgumentParser(description="Personality quiz website")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")), help="Listening port (default: 8000)")
+    port = parser.parse_args().port
+    print(f"????: http://127.0.0.1:{port}")
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

@@ -4,8 +4,21 @@
 
 ## 运行
 
-需要 Python 3.10+，无第三方依赖。运行 `python server.py`，打开 http://127.0.0.1:8000 。可通过 `PORT` 和 `DB_PATH` 环境变量指定端口与数据库文件。默认数据库位于 `data/personality.db`。
+需要 Python 3.10+，无第三方依赖。
 
+使用默认端口 8000：
+
+```powershell
+python server.py
+```
+
+直接指定端口：
+
+```powershell
+python server.py --port 8080
+```
+
+启动后访问 `http://127.0.0.1:8080`。也可以通过 `PORT` 环境变量设置默认端口，通过 `DB_PATH` 指定数据库文件。默认数据库位于 `data/personality.db`。
 ## 测试
 
 运行 `python -m unittest discover -s tests -v`。

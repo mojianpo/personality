@@ -4,7 +4,7 @@ let dimensions = [];
 let answers = [];
 let current = 0;
 let busy = false;
-let accessToken = null;
+let accessToken = localStorage.getItem('quiz_access_token');
 let completed = 0;
 const labels = ['非常不同意', '比较不同意', '不确定', '比较同意', '非常同意'];
 const icons = ['◎', '◇', '⚖', '▦', '✦', '♡'];
@@ -100,13 +100,29 @@ function renderTypes() {
   if (location.hash.startsWith('#type-')) document.getElementById(location.hash.slice(1))?.scrollIntoView();
 }
 
-function startQuiz() {
+function openKeyDialog() {
   const dialog = document.querySelector('#key-dialog');
   const input = document.querySelector('#key-input');
   document.querySelector('#key-error').textContent = '';
   input.value = '';
   dialog.showModal();
   input.focus();
+}
+
+async function startQuiz() {
+  if (accessToken) {
+    try {
+      const quiz = await api('/api/questions', {headers: {'Authorization': `Bearer ${accessToken}`}});
+      questions = quiz.questions;
+      dimensions = quiz.dimensions;
+      beginQuiz();
+      return;
+    } catch {
+      accessToken = null;
+      localStorage.removeItem('quiz_access_token');
+    }
+  }
+  openKeyDialog();
 }
 
 function beginQuiz() {
@@ -188,12 +204,17 @@ document.querySelector('#key-form').addEventListener('submit', async event => {
   try {
     const result = await api('/api/verify-key', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key: input.value})});
     accessToken = result.token;
+    localStorage.setItem('quiz_access_token', accessToken);
     const quiz = await api('/api/questions', {headers: {'Authorization': `Bearer ${accessToken}`}});
     questions = quiz.questions;
     dimensions = quiz.dimensions;
     document.querySelector('#key-dialog').close();
     beginQuiz();
   } catch (err) {
+    if (accessToken) {
+      accessToken = null;
+      localStorage.removeItem('quiz_access_token');
+    }
     error.textContent = err.message.includes('KEY') ? 'KEY \u4e0d\u6b63\u786e\uff0c\u8bf7\u8f93\u5165\u6b63\u786e\u7684 KEY\u3002' : `\u6682\u65f6\u65e0\u6cd5\u5f00\u59cb\u6d4b\u9a8c\uff1a${err.message}`;
     input.focus();
     input.select();
