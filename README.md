@@ -16,6 +16,9 @@ python server.py
 
 ```powershell
 python server.py --port 8080
+
+nohup python3 server.py --port 8080 > server.log 2>&1 &
+
 ```
 
 启动后访问 `http://127.0.0.1:8080`。也可以通过 `PORT` 环境变量设置默认端口，通过 `DB_PATH` 指定数据库文件。默认数据库位于 `data/personality.db`。
