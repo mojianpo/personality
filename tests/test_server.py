@@ -49,16 +49,22 @@ class ApiTests(unittest.TestCase):
         headers = {"Content-Type": "application/json"}
         if authenticated and hasattr(self, "token"):
             headers["Authorization"] = f"Bearer {self.token}"
-        request = urllib.request.Request(self.base + path, data=body, headers=headers)
+        request = urllib.request.Request(self.base + server.BASE_PATH + path, data=body, headers=headers)
         with urllib.request.urlopen(request) as response:
             return response.status, json.load(response)
 
+    def test_site_is_mounted_under_mbti_prefix(self):
+        status, _ = self.request("/api/dimensions", authenticated=False)
+        self.assertEqual(status, 200)
+        with urllib.request.urlopen(self.base + "/") as response:
+            self.assertEqual(response.geturl(), self.base + server.BASE_PATH + "/")
+
     def test_key_is_required_and_wrong_key_is_rejected(self):
-        wrong = urllib.request.Request(self.base + "/api/verify-key", data=json.dumps({"key": "wrong"}).encode(), headers={"Content-Type": "application/json"})
+        wrong = urllib.request.Request(self.base + server.BASE_PATH + "/api/verify-key", data=json.dumps({"key": "wrong"}).encode(), headers={"Content-Type": "application/json"})
         with self.assertRaises(urllib.error.HTTPError) as error:
             urllib.request.urlopen(wrong)
         self.assertEqual(error.exception.code, 401)
-        request = urllib.request.Request(self.base + "/api/questions")
+        request = urllib.request.Request(self.base + server.BASE_PATH + "/api/questions")
         with self.assertRaises(urllib.error.HTTPError) as error:
             urllib.request.urlopen(request)
         self.assertEqual(error.exception.code, 403)
@@ -78,7 +84,7 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT COUNT(*) FROM assessments").fetchone()[0], 3)
 
     def test_invalid_submission_does_not_change_count(self):
-        request = urllib.request.Request(self.base + "/api/assessments", data=json.dumps({"participant_id": "bad", "answers": [3] * 36}).encode(), headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.token}"})
+        request = urllib.request.Request(self.base + server.BASE_PATH + "/api/assessments", data=json.dumps({"participant_id": "bad", "answers": [3] * 36}).encode(), headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.token}"})
         with self.assertRaises(urllib.error.HTTPError) as error:
             urllib.request.urlopen(request)
         self.assertEqual(error.exception.code, 400)

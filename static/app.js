@@ -64,7 +64,7 @@ function escapeHtml(value) {
 }
 
 async function api(path, options) {
-  const response = await fetch(path, options);
+  const response = await fetch(`/mbti${path}`, options);
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || '请求失败，请稍后重试。');
   return data;
@@ -77,7 +77,7 @@ function renderHome() {
   document.querySelector('.start-button').hidden = false;
   app.innerHTML = `<section class="hero" id="about"><div class="hero-copy"><p class="hero-index">01 / 探索自我</p><h1>认识自己，<br>从一次真诚的<br><em>回答开始。</em></h1><p class="hero-description">36 道日常情境题，探索你的六维人格倾向。没有标准答案，只有更清晰的自己。</p><div class="hero-actions"><button class="button start-button" type="button">开始探索 <span aria-hidden="true">↗</span></button><div class="stat"><span>已完成人数</span><strong id="people-count">${completed.toLocaleString('zh-CN')}</strong></div></div><p class="hero-note">约需 7 分钟 · 免费体验 · 无需注册</p></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><div class="compass"><span>✦</span></div><div class="art-label label-top">DISCOVER</div><div class="art-label label-bottom">YOUR TRUE NORTH</div></div></section><section class="dimensions-section" id="dimensions"><div class="section-heading"><div><p class="section-number">02 / 六维度</p><h2>探索你的六维人格</h2></div><p>从六个关键维度，描绘你独特的思考、行动与表达方式。</p></div><div class="dimension-grid">${dimensions.map((d, i) => `<article class="dimension-card"><span class="dimension-icon tint-${i % 2}">${icons[i]}</span><div><span class="dimension-code">${d.key.split('').join(' / ')}</span><h3>${escapeHtml(d.title)}</h3><p>${escapeHtml(d.description)}</p></div><span class="card-arrow" aria-hidden="true">↗</span></article>`).join('')}</div></section><section class="closing"><span>YOUR STORY STARTS HERE</span><h2>你的答案，值得被认真倾听。</h2><button class="button start-button" type="button">开始测验 <span aria-hidden="true">→</span></button></section>`;
   app.querySelectorAll('.start-button').forEach(button => button.addEventListener('click', startQuiz));
-  app.querySelector('.dimensions-section').insertAdjacentHTML('beforeend', '<a class="types-link" href="/types">浏览 64 种人格类型 <span aria-hidden="true">↗</span></a>');
+  app.querySelector('.dimensions-section').insertAdjacentHTML('beforeend', '<a class="types-link" href="/mbti/types">浏览 64 种人格类型 <span aria-hidden="true">↗</span></a>');
 }
 
 function renderTypes() {
@@ -92,7 +92,7 @@ function renderTypes() {
     card.querySelector('.type-art').removeAttribute('aria-hidden');
     card.querySelector('.type-art span').setAttribute('aria-hidden', 'true');
     const image = document.createElement('img');
-    image.src = `/portraits/${code.slice(0, 4)}.webp`;
+    image.src = `/mbti/portraits/${code.slice(0, 4)}.webp`;
     image.alt = `${card.querySelector('h3').textContent}的人格插画`;
     image.loading = 'lazy';
     card.querySelector('.type-art').append(image);
@@ -140,7 +140,7 @@ function renderQuestion() {
   const question = questions[current];
   const selected = answers[current];
   app.innerHTML = `<section class="quiz-shell"><div class="quiz-top"><button class="text-button" id="quit" type="button">← 返回首页</button><span>请按第一直觉作答</span></div><div class="quiz-card"><div class="progress-head"><span>问题 <strong>${String(current + 1).padStart(2, '0')}</strong> / ${questions.length}</span><span>${Math.round(current / questions.length * 100)}%</span></div><div class="progress-track"><div style="width:${current / questions.length * 100}%"></div></div><p class="quiz-dimension">${escapeHtml(dimensions.find(d => d.key === question.dimension).title)}</p><h1 tabindex="-1">${escapeHtml(question.text)}</h1><p class="quiz-hint">这句话与你有多符合？</p><div class="choices" role="radiogroup" aria-label="请选择符合程度">${labels.map((label, i) => `<button type="button" class="choice ${selected === i + 1 ? 'selected' : ''}" role="radio" aria-checked="${selected === i + 1}" data-value="${i + 1}"><span class="choice-radio"></span><span>${label}</span><span class="choice-number">0${i + 1}</span></button>`).join('')}</div><div class="quiz-actions"><button class="outline-button" id="previous" type="button" ${current === 0 ? 'disabled' : ''}>← 上一题</button><button class="button" id="next" type="button" ${selected === null || busy ? 'disabled' : ''}>${current === questions.length - 1 ? '查看结果' : '下一题 →'}</button></div><p class="quiz-error" role="alert"></p></div><p class="quiz-footer">每一个答案，都让画像更接近真实的你。</p></section>`;
-  app.querySelector('#quit').onclick = location.pathname === '/types' ? renderTypes : renderHome;
+  app.querySelector('#quit').onclick = location.pathname === '/mbti/types' ? renderTypes : renderHome;
   app.querySelector('#previous').onclick = () => { current--; renderQuestion(); window.scrollTo(0, 0); app.querySelector('.quiz-card h1').focus({preventScroll: true}); };
   app.querySelectorAll('.choice').forEach(button => button.onclick = () => {
     answers[current] = Number(button.dataset.value);
@@ -180,13 +180,13 @@ function renderResult(result) {
   const profile = profiles[baseType];
   app.innerHTML = `<section class="result-shell"><div class="result-intro"><p class="section-number">你的六维人格画像</p><div class="result-symbol">✦</div><h1>${code}</h1><p>这是此刻的你，在六个维度上的倾向。人格不是标签，它是继续了解自己的起点。</p><div class="result-stat">已有 <strong>${result.completed_people.toLocaleString('zh-CN')}</strong> 人完成探索</div></div><div class="result-content"><div class="section-heading"><div><p class="section-number">YOUR DIMENSIONS</p><h2>逐一读懂你的倾向</h2></div></div><div class="result-grid">${result.dimensions.map(d => { const position = 100 - d.percent; return `<article class="result-card"><div class="result-card-head"><span>${escapeHtml(d.title)}</span><strong>${escapeHtml(d.chosen)}${d.percent === 50 ? ' · 接近均衡' : ''}</strong></div><div class="trait-labels"><span>${escapeHtml(d.first)}</span><span>${escapeHtml(d.second)}</span></div><div class="trait-track"><div style="width:${position}%"></div><span style="left:${position}%"></span></div><p>${escapeHtml(d.description)}</p></article>`; }).join('')}</div><div class="result-actions"><button class="button" id="restart" type="button">重新测验 ↗</button><button class="outline-button" id="home" type="button">返回首页</button></div><p class="result-disclaimer">倾向接近均衡时，代码按固定规则归类；本结果仅供自我探索，不作为医学、心理诊断或职业决策依据。</p></div></section>`;
   app.querySelector('#restart').onclick = startQuiz;
-  app.querySelector('#home').onclick = () => { location.href = '/'; };
-  app.querySelector('.result-symbol').outerHTML = `<div class="result-portrait"><img src="/portraits/${baseType}.webp" alt="${escapeHtml(type[1])}的人格插画"></div>`;
+  app.querySelector('#home').onclick = () => { location.href = '/mbti/'; };
+  app.querySelector('.result-symbol').outerHTML = `<div class="result-portrait"><img src="/mbti/portraits/${baseType}.webp" alt="${escapeHtml(type[1])}的人格插画"></div>`;
   app.querySelector('.result-intro h1').insertAdjacentHTML('afterend', `<p class="result-type-name">${escapeHtml(type[1])} · ${escapeHtml(variant.name)}型</p>`);
   const relationStyle = result.code.endsWith('-H') ? '热烈表达会让身边的人感受到你的投入，也记得留意对方接收信息的节奏。' : '平和表达让判断与边界更清晰，也可以适时说出自己的感受。';
   const actionStyle = result.code.includes('-A-') ? '你的自我态度偏果断，可能在信息不完整时也愿意先行动。' : '你的自我态度偏审慎，先核对关键条件再推进会让你更安心。';
   app.querySelector('.result-content .section-heading').insertAdjacentHTML('beforebegin', `<section class="profile-section"><p class="section-number">PERSONALITY PORTRAIT</p><h2>你的专属人格画像</h2><p class="profile-summary">${escapeHtml(type[2])} ${escapeHtml(variant.description)} ${escapeHtml(actionStyle)} ${escapeHtml(relationStyle)}</p><div class="profile-grid">${[['核心优势', profile[0]], ['可能的盲点', profile[1]], ['关系中的你', `${profile[2]} ${relationStyle}`], ['成长建议', `${profile[3]} ${actionStyle}`]].map(([title, content], i) => `<article class="profile-card"><span class="profile-card-icon" aria-hidden="true">${['✦', '◌', '♡', '↗'][i]}</span><h3>${title}</h3><p>${escapeHtml(content)}</p></article>`).join('')}</div></section>`);
-  app.querySelector('.result-actions').insertAdjacentHTML('beforeend', `<a class="outline-button" href="/types#type-${result.code}">查看对应类型</a>`);
+  app.querySelector('.result-actions').insertAdjacentHTML('beforeend', `<a class="outline-button" href="/mbti/types#type-${result.code}">查看对应类型</a>`);
   window.scrollTo(0, 0);
   document.documentElement.classList.remove('quiz-active');
 }
@@ -230,7 +230,7 @@ Promise.all([api('/api/dimensions'), api('/api/stats')]).then(([publicData, stat
   dimensions = publicData.dimensions;
   completed = stats.completed_people;
   document.querySelector('.site-header > .start-button').disabled = false;
-  if (location.pathname === '/types') renderTypes(); else renderHome();
+  if (location.pathname === '/mbti/types') renderTypes(); else renderHome();
 }).catch(error => {
   app.innerHTML = `<section class="load-error"><h1>暂时无法加载测验</h1><p>${escapeHtml(error.message)}</p><button class="button" onclick="location.reload()">重新加载</button></section>`;
 });

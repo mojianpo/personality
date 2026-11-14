@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("DB_PATH", ROOT / "data" / "personality.db"))
 DISPLAY_BASELINE = 1000
+BASE_PATH = "/mbti"
 QUIZ_KEY = os.environ.get("QUIZ_KEY", "SK-20261114")
 ACCESS_TOKENS = {}
 ACCESS_TOKEN_TTL = 60 * 60
@@ -131,6 +132,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/":
+            self.send_response(302)
+            self.send_header("Location", f"{BASE_PATH}/")
+            self.end_headers()
+            return
+        if path == BASE_PATH:
+            self.send_response(302)
+            self.send_header("Location", f"{BASE_PATH}/")
+            self.end_headers()
+            return
+        if not path.startswith(BASE_PATH + "/"):
+            return self.send_json(404, {"error": "\u672a\u627e\u5230\u9875\u9762"})
+        path = path[len(BASE_PATH):]
         if path == "/api/dimensions":
             return self.send_json(200, {"dimensions": [{"key": d[0], "title": d[1], "first": d[4], "second": d[5], "description": d[6]} for d in DIMENSIONS]})
         if path == "/api/questions":
@@ -154,7 +168,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        path = urlparse(self.path).path
+        request_path = urlparse(self.path).path
+        if not request_path.startswith(BASE_PATH + "/"):
+            return self.send_json(404, {"error": "\u672a\u627e\u5230\u63a5\u53e3"})
+        path = request_path[len(BASE_PATH):]
         if path not in ("/api/verify-key", "/api/assessments"):
             return self.send_json(404, {"error": "\u672a\u627e\u5230\u63a5\u53e3"})
         if path == "/api/assessments" and not self.has_quiz_access():
@@ -187,5 +204,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Personality quiz website")
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")), help="Listening port (default: 8000)")
     port = parser.parse_args().port
-    print(f"????: http://127.0.0.1:{port}")
+    print(f"Personality quiz: http://127.0.0.1:{port}{BASE_PATH}/")
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
