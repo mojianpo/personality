@@ -16,6 +16,17 @@
     <button class="button button-small start-button" type="button">开始测验 <span aria-hidden="true">→</span></button>
   </header>
   <main id="app" aria-live="polite"><div class="loading">正在加载测验…</div></main>
+  <dialog id="key-dialog" aria-labelledby="key-title" aria-describedby="key-description">
+    <form id="key-form" novalidate>
+      <p class="section-number">ACCESS REQUIRED</p>
+      <h2 id="key-title">&#36755;&#20837;&#27979;&#39564; KEY</h2>
+      <p id="key-description">&#35831;&#36755;&#20837;&#27491;&#30830;&#30340; KEY &#21518;&#24320;&#22987;&#20154;&#26684;&#27979;&#39564;&#12290;</p>
+      <label for="key-input">KEY</label>
+      <input id="key-input" name="key" type="password" autocomplete="off" required aria-describedby="key-error">
+      <p id="key-error" role="alert" aria-live="assertive"></p>
+      <button class="button" id="key-submit" type="submit">&#39564;&#35777;&#24182;&#24320;&#22987;&#27979;&#39564;</button>
+    </form>
+  </dialog>
   <footer class="site-footer"><span>人格罗盘 · 为好奇的你而设计</span><span>仅供自我探索，不作为专业心理评估</span></footer>
 </body>
 </html>

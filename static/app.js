@@ -4,6 +4,7 @@ let dimensions = [];
 let answers = [];
 let current = 0;
 let busy = false;
+let accessToken = null;
 let completed = 0;
 const labels = ['非常不同意', '比较不同意', '不确定', '比较同意', '非常同意'];
 const icons = ['◎', '◇', '⚖', '▦', '✦', '♡'];
@@ -51,6 +52,12 @@ const profiles = {
   ESTP: ['敢于行动，能在变化中快速判断并抓住机会。', '追求即时反馈时，可能低估长期后果。', '喜欢直接、轻松、充满体验感的互动。', '对重要决定留一段冷静时间，检查风险与承诺。'],
   ESFP: ['擅长带动气氛，愿意把热情和快乐分享给别人。', '忙于回应眼前需求时，可能忽略自己的长期目标。', '乐于陪伴，喜欢真实、活泼且彼此支持的关系。', '为自己设一个小而清晰的长期目标，持续投入。']
 };
+const typeVariants = [
+  {code: 'A-C', name: '果断平和', description: '你倾向于先明确方向，再用平稳、清晰的方式表达原则和边界。'},
+  {code: 'A-H', name: '果断热烈', description: '你倾向于先推动想法，也会鲜明表达投入、热情与在意。'},
+  {code: 'O-C', name: '审慎平和', description: '你倾向于先比较选项与风险，再冷静地说明判断和界限。'},
+  {code: 'O-H', name: '审慎热烈', description: '你倾向于先认真权衡，同时直接表达情绪和重视的事情。'}
+];
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]));
@@ -68,9 +75,9 @@ function renderHome() {
   document.title = '人格罗盘 · 六维人格探索测验';
   document.querySelector('nav').hidden = false;
   document.querySelector('.start-button').hidden = false;
-  app.innerHTML = `<section class="hero" id="about"><div class="hero-copy"><p class="hero-index">01 / 探索自我</p><h1>认识自己，<br>从一次真诚的<br><em>回答开始。</em></h1><p class="hero-description">24 道日常情境题，探索你的六维人格倾向。没有标准答案，只有更清晰的自己。</p><div class="hero-actions"><button class="button start-button" type="button">开始探索 <span aria-hidden="true">↗</span></button><div class="stat"><span>已完成人数</span><strong id="people-count">${completed.toLocaleString('zh-CN')}</strong></div></div><p class="hero-note">约需 5 分钟 · 免费体验 · 无需注册</p></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><div class="compass"><span>✦</span></div><div class="art-label label-top">DISCOVER</div><div class="art-label label-bottom">YOUR TRUE NORTH</div></div></section><section class="dimensions-section" id="dimensions"><div class="section-heading"><div><p class="section-number">02 / 六维度</p><h2>探索你的六维人格</h2></div><p>从六个关键维度，描绘你独特的思考、行动与表达方式。</p></div><div class="dimension-grid">${dimensions.map((d, i) => `<article class="dimension-card"><span class="dimension-icon tint-${i % 2}">${icons[i]}</span><div><span class="dimension-code">${d.key.split('').join(' / ')}</span><h3>${escapeHtml(d.title)}</h3><p>${escapeHtml(d.description)}</p></div><span class="card-arrow" aria-hidden="true">↗</span></article>`).join('')}</div></section><section class="closing"><span>YOUR STORY STARTS HERE</span><h2>你的答案，值得被认真倾听。</h2><button class="button start-button" type="button">开始测验 <span aria-hidden="true">→</span></button></section>`;
+  app.innerHTML = `<section class="hero" id="about"><div class="hero-copy"><p class="hero-index">01 / 探索自我</p><h1>认识自己，<br>从一次真诚的<br><em>回答开始。</em></h1><p class="hero-description">36 道日常情境题，探索你的六维人格倾向。没有标准答案，只有更清晰的自己。</p><div class="hero-actions"><button class="button start-button" type="button">开始探索 <span aria-hidden="true">↗</span></button><div class="stat"><span>已完成人数</span><strong id="people-count">${completed.toLocaleString('zh-CN')}</strong></div></div><p class="hero-note">约需 7 分钟 · 免费体验 · 无需注册</p></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><div class="compass"><span>✦</span></div><div class="art-label label-top">DISCOVER</div><div class="art-label label-bottom">YOUR TRUE NORTH</div></div></section><section class="dimensions-section" id="dimensions"><div class="section-heading"><div><p class="section-number">02 / 六维度</p><h2>探索你的六维人格</h2></div><p>从六个关键维度，描绘你独特的思考、行动与表达方式。</p></div><div class="dimension-grid">${dimensions.map((d, i) => `<article class="dimension-card"><span class="dimension-icon tint-${i % 2}">${icons[i]}</span><div><span class="dimension-code">${d.key.split('').join(' / ')}</span><h3>${escapeHtml(d.title)}</h3><p>${escapeHtml(d.description)}</p></div><span class="card-arrow" aria-hidden="true">↗</span></article>`).join('')}</div></section><section class="closing"><span>YOUR STORY STARTS HERE</span><h2>你的答案，值得被认真倾听。</h2><button class="button start-button" type="button">开始测验 <span aria-hidden="true">→</span></button></section>`;
   app.querySelectorAll('.start-button').forEach(button => button.addEventListener('click', startQuiz));
-  app.querySelector('.dimensions-section').insertAdjacentHTML('beforeend', '<a class="types-link" href="/types">浏览 16 种人格类型 <span aria-hidden="true">↗</span></a>');
+  app.querySelector('.dimensions-section').insertAdjacentHTML('beforeend', '<a class="types-link" href="/types">浏览 64 种人格类型 <span aria-hidden="true">↗</span></a>');
 }
 
 function renderTypes() {
@@ -78,14 +85,14 @@ function renderTypes() {
   document.title = '人格类型图鉴 · 人格罗盘';
   document.querySelector('nav').hidden = false;
   document.querySelector('.site-header > .start-button').hidden = false;
-  app.innerHTML = `<section class="types-hero"><div class="types-hero-art" aria-hidden="true">✦</div><p class="section-number">PERSONALITY ATLAS</p><h1>发现 <em>16</em> 种人格类型</h1><p>四个系列，十六种不同的思考与行动方式。<br>找到与你的倾向相近的描述，也保留属于自己的独特之处。</p><button class="button start-button" type="button">开始测验 <span aria-hidden="true">→</span></button></section><div class="types-content">${typeGroups.map((group, groupIndex) => `<section class="type-group group-${groupIndex}"><div class="type-group-heading"><span class="group-symbol" aria-hidden="true">${group.symbol}</span><div><span class="dimension-code">${group.code} SERIES</span><h2>${group.name}</h2></div><p>${group.description}</p></div><div class="type-grid">${group.types.map(([code, name, description], i) => `<article class="type-card" id="type-${code}"><div class="type-art art-${groupIndex}-${i}" aria-hidden="true"><span>${icons[(groupIndex * 4 + i) % icons.length]}</span><i></i><b></b></div><div class="type-card-body"><span class="type-code">${code}</span><h3>${name}</h3><p>${description}</p></div></article>`).join('')}</div></section>`).join('')}</div><section class="closing"><span>YOUR STORY STARTS HERE</span><h2>哪一种描述更像你？</h2><button class="button start-button" type="button">开始测验 <span aria-hidden="true">→</span></button></section>`;
+  app.innerHTML = `<section class="types-hero"><div class="types-hero-art" aria-hidden="true">✦</div><p class="section-number">PERSONALITY ATLAS</p><h1>探索 <em>64</em> 种人格类型</h1><p>16 种基础人格，各自延伸出四种自我态度与情绪表达组合。<br>同一基础类型，也可以有不同的行动节奏与表达方式。</p><button class="button start-button" type="button">开始测验 <span aria-hidden="true">→</span></button></section><div class="types-content">${typeGroups.map((group, groupIndex) => `<section class="type-group group-${groupIndex}"><div class="type-group-heading"><span class="group-symbol" aria-hidden="true">${group.symbol}</span><div><span class="dimension-code">${group.code} SERIES</span><h2>${group.name}</h2></div><p>${group.description}</p></div><div class="type-grid">${group.types.flatMap(([baseCode, name, description], i) => typeVariants.map(variant => { const code = `${baseCode}-${variant.code}`; return `<article class="type-card" id="type-${code}"><div class="type-art art-${groupIndex}-${i}" aria-hidden="true"><span>${icons[(groupIndex * 4 + i) % icons.length]}</span><i></i><b></b></div><div class="type-card-body"><span class="type-code">${code}</span><h3>${name} · ${variant.name}</h3><p>${description} ${variant.description}</p></div></article>`; })).join('')}</div></section>`).join('')}</div><section class="closing"><span>YOUR STORY STARTS HERE</span><h2>哪一种描述更像你？</h2><button class="button start-button" type="button">开始测验 <span aria-hidden="true">→</span></button></section>`;
   app.querySelectorAll('.start-button').forEach(button => button.addEventListener('click', startQuiz));
   app.querySelectorAll('.type-card').forEach(card => {
     const code = card.querySelector('.type-code').textContent;
     card.querySelector('.type-art').removeAttribute('aria-hidden');
     card.querySelector('.type-art span').setAttribute('aria-hidden', 'true');
     const image = document.createElement('img');
-    image.src = `/portraits/${code}.webp`;
+    image.src = `/portraits/${code.slice(0, 4)}.webp`;
     image.alt = `${card.querySelector('h3').textContent}的人格插画`;
     image.loading = 'lazy';
     card.querySelector('.type-art').append(image);
@@ -94,6 +101,15 @@ function renderTypes() {
 }
 
 function startQuiz() {
+  const dialog = document.querySelector('#key-dialog');
+  const input = document.querySelector('#key-input');
+  document.querySelector('#key-error').textContent = '';
+  input.value = '';
+  dialog.showModal();
+  input.focus();
+}
+
+function beginQuiz() {
   if (!questions.length) return;
   document.documentElement.classList.add('quiz-active');
   answers = Array(questions.length).fill(null);
@@ -129,7 +145,7 @@ function renderQuestion() {
     try {
       let id = localStorage.getItem('personality_participant_id');
       if (!id) { id = crypto.randomUUID(); localStorage.setItem('personality_participant_id', id); }
-      const result = await api('/api/assessments', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({participant_id: id, answers})});
+      const result = await api('/api/assessments', {method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`}, body: JSON.stringify({participant_id: id, answers})});
       completed = result.completed_people;
       renderResult(result);
     } catch (error) {
@@ -143,27 +159,54 @@ function renderQuestion() {
 function renderResult(result) {
   const code = escapeHtml(result.code);
   const baseType = result.code.slice(0, 4);
-  const groupIndex = typeGroups.findIndex(group => group.types.some(item => item[0] === baseType));
-  const slotIndex = typeGroups[groupIndex].types.findIndex(item => item[0] === baseType);
-  const type = typeGroups[groupIndex].types[slotIndex];
+  const type = typeGroups.flatMap(group => group.types).find(item => item[0] === baseType);
+  const variant = typeVariants.find(item => item.code === result.code.slice(5));
   const profile = profiles[baseType];
-  const supplements = result.dimensions.slice(4).map(d => ({name: d.chosen === d.key[0] ? d.first : d.second, description: d.description}));
   app.innerHTML = `<section class="result-shell"><div class="result-intro"><p class="section-number">你的六维人格画像</p><div class="result-symbol">✦</div><h1>${code}</h1><p>这是此刻的你，在六个维度上的倾向。人格不是标签，它是继续了解自己的起点。</p><div class="result-stat">已有 <strong>${result.completed_people.toLocaleString('zh-CN')}</strong> 人完成探索</div></div><div class="result-content"><div class="section-heading"><div><p class="section-number">YOUR DIMENSIONS</p><h2>逐一读懂你的倾向</h2></div></div><div class="result-grid">${result.dimensions.map(d => { const position = 100 - d.percent; return `<article class="result-card"><div class="result-card-head"><span>${escapeHtml(d.title)}</span><strong>${escapeHtml(d.chosen)}${d.percent === 50 ? ' · 接近均衡' : ''}</strong></div><div class="trait-labels"><span>${escapeHtml(d.first)}</span><span>${escapeHtml(d.second)}</span></div><div class="trait-track"><div style="width:${position}%"></div><span style="left:${position}%"></span></div><p>${escapeHtml(d.description)}</p></article>`; }).join('')}</div><div class="result-actions"><button class="button" id="restart" type="button">重新测验 ↗</button><button class="outline-button" id="home" type="button">返回首页</button></div><p class="result-disclaimer">倾向接近均衡时，代码按固定规则归类；本结果仅供自我探索，不作为医学、心理诊断或职业决策依据。</p></div></section>`;
   app.querySelector('#restart').onclick = startQuiz;
   app.querySelector('#home').onclick = () => { location.href = '/'; };
   app.querySelector('.result-symbol').outerHTML = `<div class="result-portrait"><img src="/portraits/${baseType}.webp" alt="${escapeHtml(type[1])}的人格插画"></div>`;
-  app.querySelector('.result-intro h1').insertAdjacentHTML('afterend', `<p class="result-type-name">${escapeHtml(type[1])} · ${baseType}</p>`);
-  app.querySelector('.result-content .section-heading').insertAdjacentHTML('beforebegin', `<section class="profile-section"><p class="section-number">PERSONALITY PORTRAIT</p><h2>你的专属人格画像</h2><p class="profile-summary">${escapeHtml(type[2])} 你的补充倾向是「${escapeHtml(supplements[0].name)}」与「${escapeHtml(supplements[1].name)}」。${supplements.map(item => escapeHtml(item.description)).join(' ')}</p><div class="profile-grid">${[['核心优势', profile[0]], ['可能的盲点', profile[1]], ['关系中的你', profile[2]], ['成长建议', profile[3]]].map(([title, content], i) => `<article class="profile-card"><span class="profile-card-icon" aria-hidden="true">${['✦', '◌', '♡', '↗'][i]}</span><h3>${title}</h3><p>${escapeHtml(content)}</p></article>`).join('')}</div></section>`);
-  app.querySelector('.result-actions').insertAdjacentHTML('beforeend', '<a class="outline-button" href="/types">浏览人格类型</a>');
+  app.querySelector('.result-intro h1').insertAdjacentHTML('afterend', `<p class="result-type-name">${escapeHtml(type[1])} · ${escapeHtml(variant.name)}型</p>`);
+  const relationStyle = result.code.endsWith('-H') ? '热烈表达会让身边的人感受到你的投入，也记得留意对方接收信息的节奏。' : '平和表达让判断与边界更清晰，也可以适时说出自己的感受。';
+  const actionStyle = result.code.includes('-A-') ? '你的自我态度偏果断，可能在信息不完整时也愿意先行动。' : '你的自我态度偏审慎，先核对关键条件再推进会让你更安心。';
+  app.querySelector('.result-content .section-heading').insertAdjacentHTML('beforebegin', `<section class="profile-section"><p class="section-number">PERSONALITY PORTRAIT</p><h2>你的专属人格画像</h2><p class="profile-summary">${escapeHtml(type[2])} ${escapeHtml(variant.description)} ${escapeHtml(actionStyle)} ${escapeHtml(relationStyle)}</p><div class="profile-grid">${[['核心优势', profile[0]], ['可能的盲点', profile[1]], ['关系中的你', `${profile[2]} ${relationStyle}`], ['成长建议', `${profile[3]} ${actionStyle}`]].map(([title, content], i) => `<article class="profile-card"><span class="profile-card-icon" aria-hidden="true">${['✦', '◌', '♡', '↗'][i]}</span><h3>${title}</h3><p>${escapeHtml(content)}</p></article>`).join('')}</div></section>`);
+  app.querySelector('.result-actions').insertAdjacentHTML('beforeend', `<a class="outline-button" href="/types#type-${result.code}">查看对应类型</a>`);
   window.scrollTo(0, 0);
   document.documentElement.classList.remove('quiz-active');
 }
 
+document.querySelector('#key-dialog').addEventListener('cancel', event => event.preventDefault());
+document.querySelector('#key-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const input = document.querySelector('#key-input');
+  const submit = document.querySelector('#key-submit');
+  const error = document.querySelector('#key-error');
+  if (!input.value) { error.textContent = '\u8bf7\u8f93\u5165 KEY\u3002'; input.focus(); return; }
+  submit.disabled = true;
+  submit.textContent = '\u6b63\u5728\u9a8c\u8bc1\u2026';
+  error.textContent = '';
+  try {
+    const result = await api('/api/verify-key', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key: input.value})});
+    accessToken = result.token;
+    const quiz = await api('/api/questions', {headers: {'Authorization': `Bearer ${accessToken}`}});
+    questions = quiz.questions;
+    dimensions = quiz.dimensions;
+    document.querySelector('#key-dialog').close();
+    beginQuiz();
+  } catch (err) {
+    error.textContent = err.message.includes('KEY') ? 'KEY \u4e0d\u6b63\u786e\uff0c\u8bf7\u8f93\u5165\u6b63\u786e\u7684 KEY\u3002' : `\u6682\u65f6\u65e0\u6cd5\u5f00\u59cb\u6d4b\u9a8c\uff1a${err.message}`;
+    input.focus();
+    input.select();
+  } finally {
+    submit.disabled = false;
+    submit.textContent = '\u9a8c\u8bc1\u5e76\u5f00\u59cb\u6d4b\u9a8c';
+  }
+});
+
 document.querySelector('.site-header > .start-button').addEventListener('click', startQuiz);
 document.querySelector('.site-header > .start-button').disabled = true;
-Promise.all([api('/api/questions'), api('/api/stats')]).then(([quiz, stats]) => {
-  questions = quiz.questions;
-  dimensions = quiz.dimensions;
+Promise.all([api('/api/dimensions'), api('/api/stats')]).then(([publicData, stats]) => {
+  dimensions = publicData.dimensions;
   completed = stats.completed_people;
   document.querySelector('.site-header > .start-button').disabled = false;
   if (location.pathname === '/types') renderTypes(); else renderHome();
