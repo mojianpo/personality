@@ -1,0 +1,151 @@
+"""Zero-dependency personality quiz API and static site."""
+import json
+import os
+import re
+import sqlite3
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse
+
+ROOT = Path(__file__).resolve().parent
+DB_PATH = Path(os.environ.get("DB_PATH", ROOT / "data" / "personality.db"))
+DISPLAY_BASELINE = 1000
+
+DIMENSIONS = [
+    ("EI", "社交能量", "E", "I", "外向", "内向", "与人互动时获得能量，还是独处时更容易恢复？"),
+    ("SN", "信息关注", "S", "N", "实感", "直觉", "更关注具体事实，还是未来的可能性？"),
+    ("TF", "决策方式", "T", "F", "思考", "情感", "做决定时更看重逻辑，还是人的感受？"),
+    ("JP", "生活节奏", "J", "P", "计划", "灵活", "喜欢提前安排，还是保留随机应变的空间？"),
+    ("AO", "自我态度", "A", "O", "坚定", "审慎", "面对自己的判断，更果断还是更愿意反复推敲？"),
+    ("CH", "情绪表达", "C", "H", "平和", "热烈", "情绪通常平稳内敛，还是鲜明直接？"),
+]
+INSIGHTS = {
+    "E": "你常通过交流整理想法，和他人的互动可能为你带来动力。",
+    "I": "你通常需要独处整理思绪，更偏好深入而有质量的交流。",
+    "S": "你倾向于从可观察的事实入手，重视经验和具体细节。",
+    "N": "你善于联想和发现可能性，常先看见事情的整体走向。",
+    "T": "你做决定时倾向于梳理逻辑、证据和一致的原则。",
+    "F": "你做决定时会留意人的感受，也重视关系中的价值。",
+    "J": "清晰的计划和阶段性完成感，通常能帮助你保持节奏。",
+    "P": "你喜欢保持选择的弹性，能随新信息调整自己的安排。",
+    "A": "你较容易相信已形成的判断，并据此向前行动。",
+    "O": "你习惯多想一步，反复检查能帮你发现遗漏。",
+    "C": "你往往能平稳地处理情绪，在变化中保留思考空间。",
+    "H": "你的情绪体验和表达较鲜明，常能让人感受到你的投入。",
+}
+
+# Positive response supports the first letter; reverse-scored items are marked -1.
+QUESTION_ROWS = [
+    ("EI", 1, "参加一场聚会后，我通常觉得更有精神。"),
+    ("EI", -1, "忙碌的社交之后，我需要独处来恢复精力。"),
+    ("EI", 1, "进入陌生环境时，我会主动找人聊聊。"),
+    ("EI", -1, "我更喜欢和少数熟悉的人深入交流。"),
+    ("SN", 1, "了解新事物时，我先关注可核实的事实和细节。"),
+    ("SN", -1, "我常常先想到一件事未来可能发展成什么样。"),
+    ("SN", 1, "学习技能时，具体示例比抽象概念更有帮助。"),
+    ("SN", -1, "我喜欢从零散信息里寻找隐藏的联系。"),
+    ("TF", 1, "做重要决定时，我优先比较利弊与证据。"),
+    ("TF", -1, "如果一个决定会让人难过，我会特别慎重。"),
+    ("TF", 1, "讨论分歧时，我倾向于先指出论证中的问题。"),
+    ("TF", -1, "讨论分歧时，我先关注彼此的感受。"),
+    ("JP", 1, "我喜欢提前确定计划和截止时间。"),
+    ("JP", -1, "临时出现的新机会常让我愿意调整计划。"),
+    ("JP", 1, "任务完成后再放松，会让我更安心。"),
+    ("JP", -1, "我享受保留多个选择直到最后一刻。"),
+    ("AO", 1, "充分了解情况后，我能相信自己的判断并行动。"),
+    ("AO", -1, "即使做了决定，我也会不断想是否有更好的选择。"),
+    ("AO", 1, "收到不同意见时，我通常仍能保持对自己的信心。"),
+    ("AO", -1, "重要决定前，我会多次检查有没有遗漏。"),
+    ("CH", 1, "遇到意外时，我通常能平静地整理思路。"),
+    ("CH", -1, "开心或失望时，别人很容易看出我的情绪。"),
+    ("CH", 1, "面对冲突，我一般能保持平稳的表达。"),
+    ("CH", -1, "让我在意的事情，往往会激起很强烈的感受。"),
+]
+QUESTIONS = [{"id": i + 1, "dimension": key, "text": prompt} for i, (key, _, prompt) in enumerate(QUESTION_ROWS)]
+
+
+@contextmanager
+def connect_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(DB_PATH, timeout=10)
+    db.execute("PRAGMA busy_timeout=10000")
+    db.execute("CREATE TABLE IF NOT EXISTS participants (id TEXT PRIMARY KEY, first_completed_at TEXT NOT NULL)")
+    db.execute("CREATE TABLE IF NOT EXISTS assessments (id INTEGER PRIMARY KEY AUTOINCREMENT, participant_id TEXT NOT NULL REFERENCES participants(id), result_code TEXT NOT NULL, answers_json TEXT NOT NULL, created_at TEXT NOT NULL)")
+    try:
+        yield db
+        db.commit()
+    finally:
+        db.close()
+
+
+def score(answers):
+    if not isinstance(answers, list) or len(answers) != len(QUESTION_ROWS) or any(type(v) is not int or v < 1 or v > 5 for v in answers):
+        raise ValueError("请完成全部 24 道题，每题选择 1 至 5。")
+    result, details = [], []
+    for key, title, first, second, first_name, second_name, description in DIMENSIONS:
+        values = [(answers[i] - 1 if direction == 1 else 5 - answers[i]) for i, (dimension, direction, _) in enumerate(QUESTION_ROWS) if dimension == key]
+        percent = round(sum(values) / (len(values) * 4) * 100)
+        chosen = first if percent >= 50 else second
+        result.append(chosen)
+        details.append({"key": key, "title": title, "first": first_name, "second": second_name, "percent": percent, "chosen": chosen, "description": INSIGHTS[chosen]})
+    return "".join(result[:4]) + "-" + result[4] + "-" + result[5], details
+
+
+class Handler(BaseHTTPRequestHandler):
+    def send_json(self, status, payload):
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        path = urlparse(self.path).path
+        if path == "/api/questions":
+            return self.send_json(200, {"questions": QUESTIONS, "dimensions": [{"key": d[0], "title": d[1], "first": d[4], "second": d[5], "description": d[6]} for d in DIMENSIONS]})
+        if path == "/api/stats":
+            with connect_db() as db:
+                count = db.execute("SELECT COUNT(*) FROM participants").fetchone()[0]
+            return self.send_json(200, {"completed_people": DISPLAY_BASELINE + count})
+        files = {"/": ("index.html", "text/html; charset=utf-8"), "/types": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"), "/style.css": ("style.css", "text/css; charset=utf-8")}
+        files.update({f"/portraits/{name}.webp": (f"portraits/{name}.webp", "image/webp") for name in ("INTJ", "INTP", "ENTJ", "ENTP", "INFJ", "INFP", "ENFJ", "ENFP", "ISTJ", "ISFJ", "ESTJ", "ESFJ", "ISTP", "ISFP", "ESTP", "ESFP")})
+        if path not in files:
+            return self.send_json(404, {"error": "未找到页面"})
+        name, content_type = files[path]
+        body = (ROOT / "static" / name).read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        if urlparse(self.path).path != "/api/assessments":
+            return self.send_json(404, {"error": "未找到接口"})
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 1 or length > 4096:
+                raise ValueError("请求内容大小无效。")
+            payload = json.loads(self.rfile.read(length))
+            participant_id = payload.get("participant_id")
+            if not isinstance(participant_id, str) or not re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", participant_id):
+                raise ValueError("浏览器标识无效。")
+            code, details = score(payload.get("answers"))
+        except (ValueError, TypeError, AttributeError) as exc:
+            return self.send_json(400, {"error": str(exc)})
+        now = datetime.now(timezone.utc).isoformat()
+        with connect_db() as db:
+            db.execute("INSERT OR IGNORE INTO participants VALUES (?, ?)", (participant_id, now))
+            db.execute("INSERT INTO assessments (participant_id, result_code, answers_json, created_at) VALUES (?, ?, ?, ?)", (participant_id, code, json.dumps(payload["answers"]), now))
+            count = db.execute("SELECT COUNT(*) FROM participants").fetchone()[0]
+        self.send_json(201, {"code": code, "dimensions": details, "completed_people": DISPLAY_BASELINE + count})
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", "8000"))
+    print(f"人格罗盘: http://127.0.0.1:{port}")
+    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
